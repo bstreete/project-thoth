@@ -12,6 +12,7 @@ int distance(int x1,int y1,int x2,int y2) {
     return (int) std::sqrt( std::pow(x2-x1,2) + std::pow(y2-y1,2));
 }
 
+/*Converts gray-scale image to binary image*/
 Mat imbinary(Mat im) {
     Mat bnry = im.clone();
     for (int x = 0; x < bnry.rows; x++) {
@@ -23,15 +24,16 @@ Mat imbinary(Mat im) {
     return bnry;
 }
 
+/*Inverts gray-scale image*/
 Mat iminvert(Mat im) {
-    Mat bnry = im.clone();
-    for (int x = 0; x < bnry.rows; x++) {
-        for (int y = 0; y < bnry.cols; y++) {
-            uchar* pixel = &bnry.at<uchar>(x,y);
+    Mat nvrt = im.clone();
+    for (int x = 0; x < nvrt.rows; x++) {
+        for (int y = 0; y < nvrt.cols; y++) {
+            uchar* pixel = &nvrt.at<uchar>(x,y);
             (*pixel) = 255 - (*pixel);
         }
     }
-    return bnry;
+    return nvrt;
 }
 
 int main(int argc, char** argv) {
@@ -47,7 +49,8 @@ int main(int argc, char** argv) {
     Mat segment = input.clone();
     Mat invert = input.clone();
     Mat output = input.clone();
-    /*A blob detector to detect hazard zones, can be any size*/
+    
+    /*A blob detector to detect hazard zones; can be any size*/
     SimpleBlobDetector::Params hzrd_params;
     hzrd_params.filterByArea = true;
     hzrd_params.minArea = 0;
