@@ -12,6 +12,28 @@ int distance(int x1,int y1,int x2,int y2) {
     return (int) std::sqrt( std::pow(x2-x1,2) + std::pow(y2-y1,2));
 }
 
+Mat imbinary(Mat im) {
+    Mat bnry = im.clone();
+    for (int x = 0; x < bnry.rows; x++) {
+        for (int y = 0; y < bnry.cols; y++) {
+            uchar* pixel = &bnry.at<uchar>(x,y);
+            ( (*pixel) < 128) ? ( (*pixel) = 0) : ( (*pixel) = 255);
+        }
+    }
+    return bnry;
+}
+
+Mat iminvert(Mat im) {
+    Mat bnry = im.clone();
+    for (int x = 0; x < bnry.rows; x++) {
+        for (int y = 0; y < bnry.cols; y++) {
+            uchar* pixel = &bnry.at<uchar>(x,y);
+            (*pixel) = 255 - (*pixel);
+        }
+    }
+    return bnry;
+}
+
 int main(int argc, char** argv) {
     
     int range = 50;
@@ -19,17 +41,8 @@ int main(int argc, char** argv) {
     
     Mat input = imread(argv[1], IMREAD_GRAYSCALE);
     
-    /*
-     *BROKEN
-     *First convert image to binary by setting all gray
-     *values under 128 to 0 and all others to 255
-     */
-    for (int y = 0; y < input.rows; y++) {
-        for (int x = 0; x < input.cols; x++) {
-            uchar* pixel = &input.at<uchar>(x,y);
-            ( (*pixel) < 128) ? ( (*pixel) = 0) : ( (*pixel) = 255);
-        }
-    }
+    input = imbinary(input);
+
     /*There are 3 images stored for debugging purposes*/
     Mat segment = input.clone();
     Mat invert = input.clone();
@@ -63,6 +76,7 @@ int main(int argc, char** argv) {
             if (dist > 0 && dist < range)
             line(segment, Point(x1,y1), Point(x2,y2), Scalar(0,0,0), 2);
         }
+        /*Links blobs to above hazard zones within range*/
         for (int i = y1+1; i < input.rows; i++) {
             if (input.at<uchar>(i,x1) == 255) {
                 for (int j = i+1; j < std::min(i+range,input.rows); j++) {
@@ -74,6 +88,8 @@ int main(int argc, char** argv) {
                 break;
             }
         }
+        
+        /*Links blobs to below hazard zones within range*/
         for (int i = y1-1; i > 0; i--) {
             if (input.at<uchar>(i,x1) == 255) {
                 for (int j = i-1; j > std::max(i-range,0); j--) {
@@ -85,6 +101,8 @@ int main(int argc, char** argv) {
                 break;
             }
         }
+        
+        /*Links blobs to right hazard zones within range*/
         for (int i = x1+1; i < input.cols; i++) {
             if (input.at<uchar>(y1,i) == 255) {
                 for (int j = i+1; j < std::min(i+range, input.cols); j++) {
@@ -96,6 +114,8 @@ int main(int argc, char** argv) {
                 break;
             }
         }
+        
+        /*Links blobs to left hazard zones within range*/
         for (int i = x1-1; i > 0; i--) {
             if (input.at<uchar>(y1,i) == 255) {
                 for (int j = i-1; j > std::max(i-range,0); j--) {
@@ -109,18 +129,8 @@ int main(int argc, char** argv) {
         }
     }
     
-    /*
-     *BROKEN
-     *Invert the image so safe zones will be detected as blobs
-     */
     imwrite(seg_file_name, segment);
-    invert = segment.clone();
-    for (int y = 0; y < invert.rows; y++) {
-        for (int x = 0; x < invert.cols; x++) {
-            uchar* pixel = &invert.at<uchar>(x,y);
-            ( (*pixel) < 128) ? ( (*pixel) = 255) : ( (*pixel) = 0);
-        }
-    }
+    invert = iminvert(segment);
     imwrite(inv_file_name, invert);
     
     /*
