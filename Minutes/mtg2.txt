@@ -1,0 +1,26 @@
+Tuesday, September 8th, Meeting #2
+
+What we accomplished:
+	- Worked on the remaining sections of the preliminary project proposal which Carina started.  Members need to add their backgrounds before submitting.
+
+	- Outlined system components.
+		First, on approach to target, OR takes many many images.  Use TextureCam to analyze the safe/dangerous areas.
+		Then, using the color-coded results from TextureCam, measure blob sizes with OpenCV.
+		After safe/dangerous blobs have been measured, rank them.
+		Finally, output list with ranks, images, etc. for sample site to be chosen.
+
+ 	- Discussed more detailed needs for the project:
+ 		Need a fast way to feed images to TextureCam (script)
+ 		Also need to format image files as PGMs from FITs for TextureCam.  Can possibly be done with Gimp, would like an automated solution.  Maybe use ImageMagick or even OpenCV?
+ 		Need training images for TC
+ 		Must convert output images from TC (PPMs) to PNGs for OpenCV.
+ 		Don't forget scale!  Info will be attached to images, just need to do calculations (Carina may have something for that?)
+
+ 	- Decided how to split the work so teams of 2 can work in parallel: OpenCV and ranking will be handled by one team, TextureCam and image processing will be handled by another.  Integration and enhancements will be decided later or done with all members.
+
+What we need to do next:
+ - All members add background info to preliminary project proposal
+ - Brayden doing final proofread
+ - Justin making high-level block diagram
+ - Continue working on setting up TextureCam and OpenCV
+ - Prepare for proposal presentation? (Will be using Carina's slides)
