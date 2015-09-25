@@ -1,0 +1,29 @@
+Tuesday, September 22nd, mtg4
+
+Decided on edits for project proposal:
+   - Adding work assignment details
+   - Editing technologies
+
+Team reports:
+   - JB worked on using OpenCV contouring, segmenting, errosion to clarify and identify the safe blobs.
+   - CC completed image conversion scripts and began image superimposing script.
+
+ Resources:
+   - More training images needed (will be provided by Carina).
+   - Space on server probably not going to happen because of security clearance issues/it'll take forever to get all of us set up.
+   - Amazon Web Services free trial instead?  Brayden has experience.
+
+ ToDos/Things to Consider:
+   - Carina sending more training images
+   - CC work on distinguishing space from other black areas in image.
+   - Can we use OpenCV for everything...?  >_<
+   - Continue working on pair assignments
+   	  ~ JB want to have basic working solution by next week which gathers safe blob areas
+ 	  ~ CC will look into using OpenCV for superimposition (maybe also for image conversion), and will additionally work on extracting space and generating more images through TextureCam (will put results on github).
+   - Don't forget to consider scale!!  Might worry about that in 2nd iteration though.  
+   - CC look into extracting scale information and calculating.
+   - CC start off skeleton program.
+   - Make updates to project proposal and submit (due Thursday?)
+   - JB look into erosion dilation resources from Carina for blob smoothing & detection.
+   - Carina posting her superimposition code to github.
+   - Carina submitting edited project proposal.

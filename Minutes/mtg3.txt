@@ -1,0 +1,27 @@
+Splitting work into ranking + blob analysis and texture cam + image processing
+Justin & Brayden on OpenCV, Carina and Courtney on TextureCam
+3 weeks until iteration 1 due (Oct 8th)
+
+Carina will by tomorrow (9/15) afternoon: 
+	- looking into server & shared drive use with Osiris Rex
+	- send out sample images of all of the steps in the process (original fits, texturecam ppm, texturecam pgm, png of TextureCam overlay)
+	-send blob detection example. 
+GOALS
+	- Have access for using OpenCV and TextureCam (according to your task) by next meeting
+	- C&C look into ImageMagic conversion software
+	- C&C find a way to superimpose images (openCV or ImageMagic) probably. 
+	- By next week, have structure/interfaces designed for input/outputs. 
+	- Next 2 weeks - have all modules working.
+	- 3rd week - work on integration.
+
+
+----
+Current status after C&C 9/20 meeting:
+Investigated ImageMagick, DS9, etc -> NOPE.
+Used Gimp to make scripts to convert .fits to .pgm, convert .ppm to .png
+Investigated using gimp for superimposing images:  
+	1: load layer (gimp-file-load-layer) and image
+	2: set opacity (gimp-layer-set-opacity)
+	3: add layer to image (gimp-image-add-layer)
+ToDo: Make sure TextureCam is set up by Tuesday, Write script to feed images to TextureCam
+Meet again Tuesday after class & group meeting

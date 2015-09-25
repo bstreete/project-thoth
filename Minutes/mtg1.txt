@@ -1,0 +1,27 @@
+Meeting1_W9-2
+
+	Introduction to the project from Carina.	
+	Project background: Want a way to find a safe sample retrieval site on an asteroid surface.  Find areas without large boulders, where rocks are smaller than a certain size, with at least 15" clearance, etc.  Rank areas by % danger/% safe.
+
+	Reviewed existing material/programs/technologies/algorithms:
+		- TextureCam (machine learning, returns a color-coded image)
+		- Morphology & watershed combination used by mining school
+		- Blob finding algorithms.
+
+	Discussed technologies & methods to use:
+		- Decided to start with long-distance images, narrow down area selection by eliminating areas with large boulders.  What about distorted edges?  Eliminate them?
+		- Restrictions from OpenCV: works with Java, C, C++, Python.  Good for all main OS's.
+		- Java or C,C++?  Most team members more comfortable with Java, but starting material and documentation is mainly in C++.  Decision: start with C++ and see how it goes.
+		- TextureCam possibly restricted to linux.  We can use lectura for testing.
+		- For images & lectura, could use VNC, Dropbox, SCP, etc.
+
+	Discussed measures of success & milestones
+		- End goal is documentation.  Generate list of images which are ranked from highest percentage 'safe to use' to lowest and link images to documentation.  This is the MVP.
+		- THEN consider mapping image pixels to geolocation on asteroid and ranking geolocations.
+		- Maybe later consider parallel processing?  
+		- Iteration 1: make texturecam work in batches, find way to measure areas of colors, handle elimination of bad images.  Output a list with image names & percentages sorted in descending order.
+
+	TODOs
+		Install opencv, review programs from Carina, learn C++, learn opencv, learn texturecam, look at 'OpenCV Computer Vision Application CookBook' on safari books, write preliminary proposal for next Thursday.
+
+	Meeting for an hour-ish after class (1:45) on Tuesdays.
