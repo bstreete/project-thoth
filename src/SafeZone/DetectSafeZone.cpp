@@ -6,6 +6,7 @@
 #include <string>
 #include <cmath>
 #include <limits>
+#include <iostream>
 
 using namespace cv;
 
@@ -48,7 +49,58 @@ Point linkBlobLeft(int range, Mat& input, KeyPoint blob) {
                     return Point(j, y1);
                 }
             }
-            return Point(-1,-1);
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
+Point linkBlobRight(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = x1+1; i < input.cols; i++) {
+        if (input.at<uchar>(y1,i) == 255) {
+            for (int j = i+1; j < std::min(i+range, input.cols); j++) {
+                if (input.at<uchar>(y1,j) == 0) {
+                    return Point(j, y1);
+                }
+            }
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
+Point linkBlobAbove(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = y1+1; i < input.rows; i++) {
+        if (input.at<uchar>(i,x1) == 255) {
+            for (int j = i+1; j < std::min(i+range,input.rows); j++) {
+                if (input.at<uchar>(j,x1) == 0) {
+                    return Point(x1, j);
+                }
+            }
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
+Point linkBlobBelow(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = y1-1; i > 0; i--) {
+        if (input.at<uchar>(i,x1) == 255) {
+            for (int j = i-1; j > std::max(i-range,0); j--) {
+                if (input.at<uchar>(j,x1) == 0) {
+                    return Point(x1, j);
+                }
+            }
+            break;
         }
     }
     return Point(-1, -1);
@@ -56,7 +108,7 @@ Point linkBlobLeft(int range, Mat& input, KeyPoint blob) {
 
 int main(int argc, char** argv) {
     
-    int range = 50;
+    int range = 20;
     std::string in_file_name = argv[1];
     
     Mat input = imread(argv[1], IMREAD_GRAYSCALE);
@@ -64,13 +116,6 @@ int main(int argc, char** argv) {
     input = imbinary(input);
     
     Mat output = input.clone();
-
-    /*There are 3 images stored for debugging purposes*/
-    /*
-    Mat segment = input.clone();
-    Mat invert = input.clone();
-    Mat output = input.clone();
-    */
     
     /*A blob detector to detect hazard zones; can be any size*/
     SimpleBlobDetector::Params hzrd_params;
@@ -86,10 +131,6 @@ int main(int argc, char** argv) {
     std::vector<KeyPoint> hzrd_keypoints;
     hzrd_detect->detect(input, hzrd_keypoints);
     
-    /*
-    std::string seg_file_name = in_file_name.substr(0, in_file_name.length()-4) + "_seg.png";
-    std::string inv_file_name = in_file_name.substr(0, in_file_name.length()-4) + "_inv.png";
-     */
     std::string out_file_name = in_file_name.substr(0, in_file_name.length()-4) + "_out.png";
     for (KeyPoint p1 : hzrd_keypoints) {
         int x1 = (int) p1.pt.x;
@@ -105,76 +146,60 @@ int main(int argc, char** argv) {
             if (dist > 0 && dist < range)
             line(output, Point(x1,y1), Point(x2,y2), Scalar(0,0,0), 2);
         }
+        
+        Point p2;
+        
         /*Links blobs to above hazard zones within range*/
-        for (int i = y1+1; i < input.rows; i++) {
-            if (input.at<uchar>(i,x1) == 255) {
-                for (int j = i+1; j < std::min(i+range,input.rows); j++) {
-                    if (input.at<uchar>(j,x1) == 0) {
-                        line(output, Point(x1,i-4), Point(x1,j+4), Scalar(0,0,0), 2);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
-            }
+        p2 = linkBlobAbove(range, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) ) {
+            line(output, Point(x1,y1), Point(p2.x, p2.y+4), Scalar(0,0,0), 2);
+            perimeterLinked = true;
         }
         
         /*Links blobs to below hazard zones within range*/
-        for (int i = y1-1; i > 0; i--) {
-            if (input.at<uchar>(i,x1) == 255) {
-                for (int j = i-1; j > std::max(i-range,0); j--) {
-                    if (input.at<uchar>(j,x1) == 0) {
-                        line(output, Point(x1,i+4), Point(x1,j-4), Scalar(0,0,0), 2);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
-            }
+        p2 = linkBlobBelow(range, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) ) {
+            line(output, Point(x1,y1), Point(p2.x, p2.y-4), Scalar(0,0,0), 2);
+            perimeterLinked = true;
         }
         
         /*Links blobs to right hazard zones within range*/
-        for (int i = x1+1; i < input.cols; i++) {
-            if (input.at<uchar>(y1,i) == 255) {
-                for (int j = i+1; j < std::min(i+range, input.cols); j++) {
-                    if (input.at<uchar>(y1,j) == 0) {
-                        line(output, Point(i-4, y1), Point(j+4,y1), Scalar(0,0,0), 2);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
-            }
+        p2 = linkBlobRight(range, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) ) {
+            line(output, Point(x1,y1), Point(p2.x+4, p2.y), Scalar(0,0,0), 2);
+            perimeterLinked = true;
+        }
+
+        /*Links blobs to left hazard zones within range*/
+        p2 = linkBlobLeft(range, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) ) {
+            line(output, Point(x1,y1), Point(p2.x-4, p2.y), Scalar(0,0,0), 2);
+            perimeterLinked = true;
         }
         
-        /*Links blobs to left hazard zones within range*/
-        /*
-        for (int i = x1-1; i > 0; i--) {
-            if (input.at<uchar>(y1,i) == 255) {
-                for (int j = i-1; j > std::max(i-range,0); j--) {
-                    if (input.at<uchar>(y1,j) == 0) {
-                        line(segment, Point(i+4,y1), Point(j-4, y1), Scalar(0,0,0), 2);
-                        perimeterLinked = true;
-                        break;
-                    }
+        if (!perimeterLinked) {
+            std::vector<Point> points = {
+                linkBlobLeft(3000, input, p1),
+                linkBlobRight(3000, input, p1),
+                linkBlobAbove(3000, input, p1),
+                linkBlobBelow(3000, input, p1)
+            };
+            int minDistLink = std::min(min(distance(x1, y1, points[0].x, points[0].y),
+                                           distance(x1, y1, points[1].x, points[1].y)),
+                                       min(distance(x1, y1, points[2].x, points[2].y),
+                                           distance(x1, y1, points[3].x, points[3].y)));
+            for (Point pMinDist : points) {
+                if (distance(x1, y1, pMinDist.x, pMinDist.y) == minDistLink) {
+                    line(output, Point(x1,y1), pMinDist, Scalar(0,0,0), 2);
                 }
-                break;
             }
         }
-         */
-        Point p2 = linkBlobLeft(range, input, p1);
-        if ( !(p2.x == -1 && p2.y == -1) )
-            line(output, Point(x1,y1), Point(p2.x-4, p2.y), Scalar(0,0,0), 2);
     }
     
-    /*
-    imwrite(seg_file_name, segment);
-    invert = iminvert(segment);
-    imwrite(inv_file_name, invert);
-     */
+    output = iminvert(output);
     
     /*
-     *A blob detector to detect safe zones, area must
+     *A blob detector to detect safe zones, area must be
      *larger than area of circle with diameter $range
      */
     SimpleBlobDetector::Params safe_params;
@@ -182,16 +207,17 @@ int main(int argc, char** argv) {
     safe_params.minArea = (int) (3.14*std::pow(range/2,2));
     safe_params.maxArea = std::numeric_limits<int>::max();
     safe_params.filterByConvexity = true;
-    safe_params.minConvexity = 0;
+    safe_params.minConvexity = .8;
     
     /*Detect safe zones*/
     Ptr<SimpleBlobDetector> safe_detect = SimpleBlobDetector::create(safe_params);
     std::vector<KeyPoint> safe_keypoints;
     safe_detect->detect(output, safe_keypoints);
+    for (KeyPoint p : safe_keypoints)
+        std::cout << '(' << p.pt.x << ',' << p.pt.y << ')' << '\n';
     
     /*display circle around safe zones*/
     drawKeypoints(output, safe_keypoints, output, Scalar(0,0,255), DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-    
     imwrite(out_file_name, output);
     return 0;
 }
