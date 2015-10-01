@@ -1,0 +1,21 @@
+Tuesday, October 1st 
+
+For iteration 1, we need a simple script that will run the entire process for a single image. 
+	- Carina is putting that script together. Need it done by next group meeting on 10/6
+	- Script will convert image from .fitz. Then, run it through texture cam. Finally,
+	push the output through the blob detector program. 
+	-Discussed forking a new set of code so that the current stable 'release' isn't broken while we work on the flood fill algorithm. 
+
+Brayden and Justin can calculate the available area now. 
+	- Discussed using floodfill instead of contour analysis
+	- Agreed that floodfill should be a goal for iteration 2
+		- Can use blob detection on the threshold image
+		- Use central points from the blob detector for flood fill to minimize scanning
+		- Would need to filter by area during blob detection, not sure of required radius
+
+		- Could also still cluster the bad blobs, then invert and use floodfill
+		- Need to test with different images to see how it affects correctness
+
+Carina and Courtney provided more images to test against.
+	- Have new texture cam outputs that identify space correctly
+	- Carina will push once she is able to access her work computer
