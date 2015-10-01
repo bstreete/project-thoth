@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <iostream>
 
 using namespace cv;
 
@@ -14,12 +15,15 @@ using namespace cv;
 // Change from contours? 
   // 
 // Global debug flag
-int debug = 0; 
+int debug = 0;
 
 // Main component prototypes
 Mat smooth_input(Mat img, int count, int size, int type);
 std::vector<std::vector<Point>> find_contours(Mat img, Mat gray);
 Mat combine_clusters(Mat img, int range); 
+Point linkBlobAbove(int range, Mat& input, KeyPoint blob);
+Point linkBlobBelow(int range, Mat& input, KeyPoint blob);
+Point linkBlobRight(int range, Mat& input, KeyPoint blob);
 Point linkBlobLeft(int range, Mat& input, KeyPoint blob);
 Mat imbinary(Mat im);
 Mat iminvert(Mat im);
@@ -147,11 +151,11 @@ std::vector<std::vector<Point>> find_contours(Mat img, Mat gray) {
   near to each other to segment the image. This simplifies the contour
   analysis which should also simplify area calculation. 
 */
-Mat combine_clusters(Mat img, int range){
+Mat combine_clusters(Mat input, int range){
 
-  img = imbinary(img);
+  input = imbinary(input);
     
-    Mat output = img.clone();
+    Mat output = input.clone();
 
     /*A blob detector to detect hazard zones; can be any size*/
     SimpleBlobDetector::Params hzrd_params;
@@ -165,65 +169,100 @@ Mat combine_clusters(Mat img, int range){
     Ptr<SimpleBlobDetector> hzrd_detect = SimpleBlobDetector::create(hzrd_params);
     
     std::vector<KeyPoint> hzrd_keypoints;
-    hzrd_detect->detect(img, hzrd_keypoints);
+    hzrd_detect->detect(input, hzrd_keypoints);
     
     for (KeyPoint p1 : hzrd_keypoints) {
+        if (debug&&DEBUG) std::cout << "Entering KeyPoint loop\n";
         int x1 = (int) p1.pt.x;
         int y1 = (int) p1.pt.y;
         
-        bool perimeterLinked = false;
-        
         /*Links together clusters of danger zones*/
         for (KeyPoint p2 : hzrd_keypoints) {
+            if (debug&&DEBUG) std::cout << "Entering Connector loop\n";
+            int border_x1, border_y1;
+            int border_x2, border_y2;
+            int delta_x1, delta_y1;
+            int delta_x2, delta_y2;
+            
             int x2 = (int) p2.pt.x;
             int y2 = (int) p2.pt.y;
-            int dist = distance(x1,y1,x2,y2);
-            if (dist > 0 && dist < range)
-            line(output, Point(x1,y1), Point(x2,y2), Scalar(0,0,0), 3);
-        }
-        /*Links blobs to above hazard zones within range*/
-        for (int i = y1+1; i < img.rows; i++) {
-            if (img.at<uchar>(i,x1) == 255) {
-                for (int j = i+1; j < std::min(i+range,img.rows); j++) {
-                    if (img.at<uchar>(j,x1) == 0) {
-                        line(output, Point(x1,i-4), Point(x1,j+4), Scalar(0,0,0), 3);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
+            
+            /*set border pixels to center pixels*/
+            border_x1 = x1;
+            border_y1 = y1;
+            border_x2 = x2;
+            border_y2 = y2;
+            
+            /*find delta values from p2 to p1*/
+            delta_x2 = x1-x2;
+            delta_y2 = y1-y2;
+            if (delta_x2 == 0) delta_y2 = 1;
+            else if (delta_y2 == 0) delta_x2 = 1;
+            else {
+                delta_x2 = (int) delta_x2/std::min(delta_x2, delta_y2);
+                delta_y2 = (int) delta_y2/std::min(delta_x2, delta_y2);
             }
+            
+            /*find border pixel for p2*/
+            while (true) {
+                int p_val = (int) input.at<uchar>(border_x2+delta_x2, border_y2+delta_y2);
+                if (p_val == 255) break;
+                else if (debug&&DEBUG) {
+                    std::cout << border_x2 << ", " << border_y2 << '\n';
+                    std::cout << "Grey value 2: " << p_val << '\n';
+                }
+                
+                border_x2 += delta_x2;
+                border_y2 += delta_y2;
+                
+            }
+            
+            /*delta values from p1 to p2 is the inverse of p2 to p1*/
+            delta_x1 = -delta_x2;
+            delta_y1 = -delta_y2;
+            
+            if (delta_x1 == 0) delta_y1 = 1;
+            else if (delta_y1 == 0) delta_x1 = 1;
+            else {
+                delta_x1 = (int) delta_x1/std::min(delta_x1, delta_y1);
+                delta_y1 = (int) delta_y1/std::min(delta_x1, delta_y1);
+            }
+            /*find border pixel for p1*/
+            while ( ((int)input.at<uchar>(border_x1+delta_x1, border_y1+delta_y1)) == 0) {
+                int p_val = input.at<uchar>(border_x1+delta_x1, border_y1+delta_y1);
+                if (p_val == 255) break;
+                else if (debug&&DEBUG) {
+                    std::cout << border_x1 << ", " << border_y1 << '\n';
+                    std::cout << "Grey value 1: " << (int)input.at<uchar>(border_x2, border_y2) << '\n';
+                }
+                border_x1 += delta_x1;
+                border_y1 += delta_y1;
+            }
+            
+            /*calculate distance between border pixels*/
+            int dist = distance(border_x1,border_y1,border_x2,border_y2);
+            if (dist > 0 && dist < range*2)
+                line(output, Point(x1,y1), Point(x2,y2), Scalar(0,0,0), 3);
         }
+        
+        Point p2;
+        /*Links blobs to above hazard zones within range*/
+        p2 = linkBlobAbove(range*2, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) )
+            line(output, Point(x1,y1), Point(p2.x, p2.y+4), Scalar(0,0,0), 3);
         
         /*Links blobs to below hazard zones within range*/
-        for (int i = y1-1; i > 0; i--) {
-            if (img.at<uchar>(i,x1) == 255) {
-                for (int j = i-1; j > std::max(i-range,0); j--) {
-                    if (img.at<uchar>(j,x1) == 0) {
-                        line(output, Point(x1,i+4), Point(x1,j-4), Scalar(0,0,0), 3);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
-            }
-        }
+        p2 = linkBlobBelow(range*2, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) )
+            line(output, Point(x1,y1), Point(p2.x, p2.y-4), Scalar(0,0,0), 3);
         
         /*Links blobs to right hazard zones within range*/
-        for (int i = x1+1; i < img.cols; i++) {
-            if (img.at<uchar>(y1,i) == 255) {
-                for (int j = i+1; j < std::min(i+range, img.cols); j++) {
-                    if (img.at<uchar>(y1,j) == 0) {
-                        line(output, Point(i-4, y1), Point(j+4,y1), Scalar(0,0,0), 3);
-                        perimeterLinked = true;
-                        break;
-                    }
-                }
-                break;
-            }
-        }
-
-        Point p2 = linkBlobLeft(range, img, p1);
+        p2 = linkBlobRight(range*2, input, p1);
+        if ( !(p2.x == -1 && p2.y == -1) )
+            line(output, Point(x1,y1), Point(p2.x+4, p2.y), Scalar(0,0,0), 3);
+        
+        /*Links blobs to left hazard zones within range*/
+        p2 = linkBlobLeft(range*2, input, p1);
         if ( !(p2.x == -1 && p2.y == -1) )
             line(output, Point(x1,y1), Point(p2.x-4, p2.y), Scalar(0,0,0), 3);
     }
@@ -249,6 +288,58 @@ Point linkBlobLeft(int range, Mat& input, KeyPoint blob) {
     }
     return Point(-1, -1);
 }
+
+Point linkBlobRight(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = x1+1; i < input.cols; i++) {
+        if (input.at<uchar>(y1,i) == 255) {
+            for (int j = i+1; j < std::min(i+range, input.cols); j++) {
+                if (input.at<uchar>(y1,j) == 0) {
+                    return Point(j, y1);
+                }
+            }
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
+Point linkBlobAbove(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = y1+1; i < input.rows; i++) {
+        if (input.at<uchar>(i,x1) == 255) {
+            for (int j = i+1; j < std::min(i+range,input.rows); j++) {
+                if (input.at<uchar>(j,x1) == 0) {
+                    return Point(x1, j);
+                }
+            }
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
+Point linkBlobBelow(int range, Mat& input, KeyPoint blob) {
+    int x1 = (int) blob.pt.x;
+    int y1 = (int) blob.pt.y;
+    
+    for (int i = y1-1; i > 0; i--) {
+        if (input.at<uchar>(i,x1) == 255) {
+            for (int j = i-1; j > std::max(i-range,0); j--) {
+                if (input.at<uchar>(j,x1) == 0) {
+                    return Point(x1, j);
+                }
+            }
+            break;
+        }
+    }
+    return Point(-1, -1);
+}
+
 /*Converts gray-scale image to binary image*/
 Mat imbinary(Mat im) {
     Mat bnry = im.clone();
