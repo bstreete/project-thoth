@@ -12,151 +12,193 @@ using namespace cv;
 
 // cmake . && make && ./BlobDetector -i ../../input/st_2472776818_vAUTOLABEL.ppm -o test.png
 
-// Change from contours? 
-  // 
+// Change from contours?
+//
 // Global debug flag
 int debug = 0;
 
 // Main component prototypes
 Mat smooth_input(Mat img, int count, int size, int type);
 std::vector<std::vector<Point>> find_contours(Mat img, Mat gray);
-Mat combine_clusters(Mat img, int range); 
+Mat combine_clusters(Mat img, int range);
 Point linkBlobAbove(int range, Mat& input, KeyPoint blob);
 Point linkBlobBelow(int range, Mat& input, KeyPoint blob);
 Point linkBlobRight(int range, Mat& input, KeyPoint blob);
 Point linkBlobLeft(int range, Mat& input, KeyPoint blob);
 Mat imbinary(Mat im);
 Mat iminvert(Mat im);
+Mat region_filling(Mat image, int* size);
 double calc_area(std::vector<std::vector<Point>> contours);
 
 // Miscellaneous helper prototypes
-int distance(int x1, int y1, int x2, int y2); 
-int check_args(int *size, int *type, int *count, int *range, std::string *file_name, 
-  std::string *output_name, int argc, char** argv); 
+int distance(int x1, int y1, int x2, int y2);
+int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
+               std::string *output_name, int argc, char** argv);
 void usage(char* binary);
 
 /** @function main */
 int main( int argc, char** argv ){
-  std::string file_name, output_name;
-  int size = 5, type = MORPH_ELLIPSE, count = 5, status, range = 10;
-  Mat src, gray_scale, output;
-  std::vector<std::vector<Point>> contours;
-  double area; 
-
-  // Check the passed arguments
-  status = check_args(&size, &type, &count, &range, &file_name, &output_name, argc, argv);
-  // Usage or help requested
-  if (status == -1) return 0;
-  // Invalid arguments passed
-  if (status == 1) return 1;
-
-  // Read the image
-  src = imread(file_name);
-
-  // Ensure the image loaded
-  if( !src.data){ fprintf(stderr, "Unable to load %s. Verify the path and try again.\n", argv[1]); return 1; }
-
-  // Threshold the image - BGR
-  inRange(src, Scalar(0,0,150), Scalar(255,255,255), gray_scale);
-
-  // Erode the image
-  src = smooth_input(gray_scale, count, size, type);
-
-  // Automagically cluster nearby danger zones
-  src = combine_clusters(src, range);
-
-  // Find contours of the clustered image
-  contours = find_contours(src, gray_scale);
-
-  // Calculate area
-  area = calc_area(contours); 
-
-  printf("Total Usable Area: %.02f%%\n", area * 100/ (src.rows * src.cols));
-
-  // Draw the contours on the input image
-  cvtColor(gray_scale, output, CV_GRAY2RGB);
-
-  RNG rng(12345);
-  for (int x = 0; x < contours.size(); x++) {
-    Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
-    drawContours( output, contours, x, color, -1, 8);
-  }
-
-  // Display the results if debug is enabled
-  if (debug&&DEBUG) { imshow( "Result", output); waitKey(0); }
-
-  // Save the eroded image for further comparisons
-  imwrite(output_name, output);
-  return 0;
+    std::string file_name, output_name;
+    int size = 5, type = MORPH_ELLIPSE, count = 5, status, range = 10;
+    Mat src, gray_scale, output;
+    std::vector<std::vector<Point>> contours;
+    int area;
+    
+    // Check the passed arguments
+    status = check_args(&size, &type, &count, &range, &file_name, &output_name, argc, argv);
+    // Usage or help requested
+    if (status == -1) return 0;
+    // Invalid arguments passed
+    if (status == 1) return 1;
+    
+    // Read the image
+    src = imread(file_name);
+    
+    // Ensure the image loaded
+    if( !src.data){ fprintf(stderr, "Unable to load %s. Verify the path and try again.\n", argv[1]); return 1; }
+    
+    // Threshold the image - BGR
+    inRange(src, Scalar(0,0,150), Scalar(255,255,255), gray_scale);
+    
+    // Erode the image
+    src = smooth_input(gray_scale, count, size, type);
+    
+    // Automagically cluster nearby danger zones
+    //src = combine_clusters(src, range);
+    
+    src = region_filling(src, &area);
+    // Find contours of the clustered image
+    //contours = find_contours(src, gray_scale);
+    
+    // Calculate area
+    //area = calc_area(contours);
+    
+    printf("Total Usable Area: %.02f%%\n", (double) area * 100.0/ (src.rows * src.cols));
+    
+    // Draw the contours on the input image
+    /*
+     cvtColor(gray_scale, output, CV_GRAY2RGB);
+     
+     RNG rng(12345);
+     for (int x = 0; x < contours.size(); x++) {
+     Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
+     drawContours( output, contours, x, color, -1, 8);
+     }
+     */
+    // Display the results if debug is enabled
+    if (debug&&DEBUG) { imshow( "Result", src); waitKey(0); }
+    
+    // Save the eroded image for further comparisons
+    imwrite(output_name, src);
+    return 0;
 }
 
 /*
-  Erodes and dilates the passed image multiple times determined by the value
-  passed in count. The size determines the size of the pixel used
-  to morph the original image. Type determines the type of pixel used.
-  It expects MORPH_RECT, MORPH_CROSS, or MORPH_ELLIPSE for the type.
-*/
+ Erodes and dilates the passed image multiple times determined by the value
+ passed in count. The size determines the size of the pixel used
+ to morph the original image. Type determines the type of pixel used.
+ It expects MORPH_RECT, MORPH_CROSS, or MORPH_ELLIPSE for the type.
+ */
 Mat smooth_input(Mat src, int count, int size, int type){
-
-  Mat img; 
-
-  // Set the morph values for erosion
-  Mat morph_values = getStructuringElement(type, Size(size, size));
-  img = src.clone();
-
-  // Morph the image 
-  for (int x = 0; x < count; x++){
-    erode(img, img, morph_values); 
-    dilate(img, img, morph_values); 
-  } 
-  
-  if (debug&&DEBUG) { imshow("After Erosion", img); waitKey(0); }
-
-  return img;
+    
+    Mat img;
+    
+    // Set the morph values for erosion
+    Mat morph_values = getStructuringElement(type, Size(size, size));
+    img = src.clone();
+    
+    // Morph the image
+    for (int x = 0; x < count; x++){
+        erode(img, img, morph_values);
+        dilate(img, img, morph_values);
+    }
+    
+    if (debug&&DEBUG) { imshow("After Erosion", img); waitKey(0); }
+    
+    return img;
 }
 
 /*
-  Reads in an eroded image (img) and the thresholded original image(gray). 
-  Finds the contours in the eroded image then draws the contours over the 
-  thresholded image converted back to RGB. 
-*/
+ Reads in an eroded image (img) and the thresholded original image(gray).
+ Finds the contours in the eroded image then draws the contours over the
+ thresholded image converted back to RGB.
+ */
 std::vector<std::vector<Point>> find_contours(Mat img, Mat gray) {
-
-  std::vector<std::vector<Point>> contours;
-  std::vector<Vec4i> hierarchy; 
-    // std::vector<Vec4i> lines; 
-  Mat output, morph_values;
-
-  // Find edges with canny 
-  Canny (img, img, 50, 300, 5);
-
-  // Display the results if debug is enabled
-  if (debug&&DEBUG) { imshow( "Canny Result", img); waitKey(0); }
-
-  morph_values = getStructuringElement(MORPH_CROSS, Size(3,3));
-  
-  dilate(img,img, morph_values);
-  erode(img, img, morph_values);
-
-  if (debug&&DEBUG) { imshow( "Canny After Morphing", img); waitKey(0); }
-
-  // Find contours; Use external contours to prevent calculating area with internal and external
-  findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0,0));
-
-  return contours;
+    
+    std::vector<std::vector<Point>> contours;
+    std::vector<Vec4i> hierarchy;
+    // std::vector<Vec4i> lines;
+    Mat output, morph_values;
+    
+    // Find edges with canny
+    Canny (img, img, 50, 300, 5);
+    
+    // Display the results if debug is enabled
+    if (debug&&DEBUG) { imshow( "Canny Result", img); waitKey(0); }
+    
+    morph_values = getStructuringElement(MORPH_CROSS, Size(3,3));
+    
+    dilate(img,img, morph_values);
+    erode(img, img, morph_values);
+    
+    if (debug&&DEBUG) { imshow( "Canny After Morphing", img); waitKey(0); }
+    
+    // Find contours; Use external contours to prevent calculating area with internal and external
+    findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0,0));
+    
+    return contours;
 }
 
+Mat region_filling(Mat image, int *size) {
+    
+    Mat filled = image.clone();
+    
+    if (debug&&DEBUG) { imshow( "After Inversion", image); waitKey(0); }
+    //Blob Detection to get the Keypoints
+    SimpleBlobDetector::Params safe_params;
+    safe_params.filterByArea = true;
+    safe_params.minArea = 0;
+    safe_params.maxArea = 50;
+    safe_params.filterByConvexity = true;
+    safe_params.minConvexity = 0;
+    safe_params.maxConvexity = 1;
+    safe_params.filterByColor = true;
+    safe_params.blobColor = 255;
+    
+    Ptr<SimpleBlobDetector> safe_detect = SimpleBlobDetector::create(safe_params);
+    
+    std::vector<KeyPoint> safe_points;
+    safe_detect->detect(image, safe_points);
+    
+    //RNG rng(12345);
+    cvtColor(image, image, CV_GRAY2RGB);
+    
+    for (KeyPoint kp : safe_points) {
+        
+        Scalar color = Scalar(0,0,0);
+        floodFill(image, kp.pt, color);
+    }
+    
+    for (int i = 0; i < image.cols; i++) {
+        for (int j = 0; j < image.rows; j++) {
+            int p_val = image.at<uchar>(i, j);
+            if (p_val == 255) floodFill(image, Point(i,j), Scalar(128, 128, 128));
+        }
+    }
+    //drawKeypoints(image, safe_points, image, Scalar(0,0,255), DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+    return image;
+}
 /*
-  Finds blobs of dangerous terrain and draws lines connecting blobs
-  near to each other to segment the image. This simplifies the contour
-  analysis which should also simplify area calculation. 
-*/
+ Finds blobs of dangerous terrain and draws lines connecting blobs
+ near to each other to segment the image. This simplifies the contour
+ analysis which should also simplify area calculation.
+ */
 Mat combine_clusters(Mat input, int range){
-
-  input = imbinary(input);
+    
+    input = imbinary(input);
     
     Mat output = input.clone();
-
+    
     /*A blob detector to detect hazard zones; can be any size*/
     SimpleBlobDetector::Params hzrd_params;
     hzrd_params.filterByArea = true;
@@ -266,10 +308,10 @@ Mat combine_clusters(Mat input, int range){
         if ( !(p2.x == -1 && p2.y == -1) )
             line(output, Point(x1,y1), Point(p2.x-4, p2.y), Scalar(0,0,0), 3);
     }
-
-  if (debug&&DEBUG) { imshow( "After Blob Clustering", output); waitKey(0); }
-
-    return output; 
+    
+    if (debug&&DEBUG) { imshow( "After Blob Clustering", output); waitKey(0); }
+    
+    return output;
 }
 
 Point linkBlobLeft(int range, Mat& input, KeyPoint blob) {
@@ -364,122 +406,122 @@ Mat iminvert(Mat im) {
 }
 
 double calc_area(std::vector<std::vector<Point>> contours){
-
-  double area = 0.0, next;
-
-  for (int x = 0; x < contours.size(); x++) {
-    next = contourArea(contours[x]);
-    area += next; 
-
-    // Show the area calculation if debug is enabled
-    if (debug&&DEBUG) { printf("After %d cycles: Total %.2f, Current %.2f\n", x, area, next);}
-  }
-  return area;
+    
+    double area = 0.0, next;
+    
+    for (int x = 0; x < contours.size(); x++) {
+        next = contourArea(contours[x]);
+        area += next;
+        
+        // Show the area calculation if debug is enabled
+        if (debug&&DEBUG) { printf("After %d cycles: Total %.2f, Current %.2f\n", x, area, next);}
+    }
+    return area;
 }
 
 int distance(int x1,int y1,int x2,int y2) {
     return (int) std::sqrt( std::pow(x2-x1,2) + std::pow(y2-y1,2));
 }
 
-int check_args(int *size, int *type, int *count, int *range, std::string *file_name, 
-  std::string *output_name, int argc, char** argv){
-
-  char option; 
-  int temp;
-
+int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
+               std::string *output_name, int argc, char** argv){
+    
+    char option;
+    int temp;
+    
     // Check for arguments
-  if (argc == 1) {
-    usage(argv[0]);
-    return 0;
-  }
-
-  while ((option = getopt(argc, argv, "hus:t:c:i:o:dr:"))!= -1) {
-    switch(option) {
-
-      // Size of pixel morphing image
-      case 's':
-        temp = atoi(optarg); 
-
-        if (temp < 1) {
-          fprintf(stderr, "Invalid size passed. Must be larger than 1.\n");
-          return 1;
-        }
-
-        *size = temp;
-        break; 
-
-      // Type of pixel for morphing image
-      case 't':
-        temp = atoi(optarg); 
-
-        if (temp == MORPH_RECT || temp == MORPH_ELLIPSE || temp == MORPH_CROSS)
-          *type = temp;
-        else {
-          fprintf(stderr, "Invalid type passed. Try again.\n");
-          return 1;
-        }
-
-        break;
-
-      // Number of erosions to execute
-      case 'c':
-        temp = atoi(optarg); 
-
-        if (temp < 1){
-          fprintf(stderr, "Invalid count passed. Needs to be greater than 1.\n");
-          return 1;
-        }
-
-        *count = temp;
-        break;
-
-       // Number of erosions to execute
-      case 'r':
-        temp = atoi(optarg); 
-
-        if (temp < 1){
-          fprintf(stderr, "Invalid radius passed. Needs to be greater than 0.\n");
-          return 1;
-        }
-        *range = temp;
-        break;
-
-      // Input/output filenames
-      case 'i':
-        *file_name = std::string(optarg);
-        break;
-
-      // Debug enabled
-      case 'd':
-        debug = 1;
-        break;
-
-      case 'o':
-        *output_name = std::string(optarg);
-        break;
-      // USage or help requested
-      case 'u':
-      case 'h':
+    if (argc == 1) {
         usage(argv[0]);
-        return -1;
-
-      default:
-        usage(argv[0]);
-        return 1;
+        return 0;
     }
-  } // End getopts while loop
-
-
-  return 0;
+    
+    while ((option = getopt(argc, argv, "hus:t:c:i:o:dr:"))!= -1) {
+        switch(option) {
+                
+                // Size of pixel morphing image
+            case 's':
+                temp = atoi(optarg);
+                
+                if (temp < 1) {
+                    fprintf(stderr, "Invalid size passed. Must be larger than 1.\n");
+                    return 1;
+                }
+                
+                *size = temp;
+                break;
+                
+                // Type of pixel for morphing image
+            case 't':
+                temp = atoi(optarg);
+                
+                if (temp == MORPH_RECT || temp == MORPH_ELLIPSE || temp == MORPH_CROSS)
+                    *type = temp;
+                else {
+                    fprintf(stderr, "Invalid type passed. Try again.\n");
+                    return 1;
+                }
+                
+                break;
+                
+                // Number of erosions to execute
+            case 'c':
+                temp = atoi(optarg);
+                
+                if (temp < 1){
+                    fprintf(stderr, "Invalid count passed. Needs to be greater than 1.\n");
+                    return 1;
+                }
+                
+                *count = temp;
+                break;
+                
+                // Number of erosions to execute
+            case 'r':
+                temp = atoi(optarg);
+                
+                if (temp < 1){
+                    fprintf(stderr, "Invalid radius passed. Needs to be greater than 0.\n");
+                    return 1;
+                }
+                *range = temp;
+                break;
+                
+                // Input/output filenames
+            case 'i':
+                *file_name = std::string(optarg);
+                break;
+                
+                // Debug enabled
+            case 'd':
+                debug = 1;
+                break;
+                
+            case 'o':
+                *output_name = std::string(optarg);
+                break;
+                // USage or help requested
+            case 'u':
+            case 'h':
+                usage(argv[0]);
+                return -1;
+                
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    } // End getopts while loop
+    
+    
+    return 0;
 }
 
 void usage(char* binary)  {
-  printf("usage: %s -s # -c # -t # -i filename -o filename\n", binary);
-  printf("\t-s Kernel size used during erosion, defaults to 5\n");
-  printf("\t-c Number of erosions to run, defaults to 5\n");
-  printf("\t-t Kernel type to use, defaults to MORPH_ELLIPSE\n");
-  printf("\t\t MORPH_RECT = 0, MORPH_CROSS = 1, MORPH_ELLIPSE = 2\n");
-  printf("\t-i Input image filename\n");
-  printf("\t-o Output image filename\n");
-  printf("\t-r Radius of desired sample locations, defaults to 10\n");
+    printf("usage: %s -s # -c # -t # -i filename -o filename\n", binary);
+    printf("\t-s Kernel size used during erosion, defaults to 5\n");
+    printf("\t-c Number of erosions to run, defaults to 5\n");
+    printf("\t-t Kernel type to use, defaults to MORPH_ELLIPSE\n");
+    printf("\t\t MORPH_RECT = 0, MORPH_CROSS = 1, MORPH_ELLIPSE = 2\n");
+    printf("\t-i Input image filename\n");
+    printf("\t-o Output image filename\n");
+    printf("\t-r Radius of desired sample locations, defaults to 10\n");
 }
