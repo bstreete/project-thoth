@@ -9,6 +9,7 @@
 using namespace cv;
 
 #define DEBUG 1     // Set to 0 for release
+#define PI 3.1415
 
 // cmake . && make && ./BlobDetector -i ../../input/st_2472776818_vAUTOLABEL.ppm -o test.png
 
@@ -19,19 +20,11 @@ int debug = 0;
 
 // Main component prototypes
 Mat smooth_input(Mat img, int count, int size, int type);
-std::vector<std::vector<Point>> find_contours(Mat img, Mat gray);
-Mat combine_clusters(Mat img, int range);
-Point linkBlobAbove(int range, Mat& input, KeyPoint blob);
-Point linkBlobBelow(int range, Mat& input, KeyPoint blob);
-Point linkBlobRight(int range, Mat& input, KeyPoint blob);
-Point linkBlobLeft(int range, Mat& input, KeyPoint blob);
-Mat imbinary(Mat im);
-Mat iminvert(Mat im);
-Mat region_filling(Mat image, int* size);
-double calc_area(std::vector<std::vector<Point>> contours);
+Mat region_filling(Mat image, int* size, int range);
+
+int calcArea(int radius);
 
 // Miscellaneous helper prototypes
-int distance(int x1, int y1, int x2, int y2);
 int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
                std::string *output_name, int argc, char** argv);
 void usage(char* binary);
@@ -62,35 +55,22 @@ int main( int argc, char** argv ){
     
     // Erode the image
     src = smooth_input(gray_scale, count, size, type);
+    if (debug&&DEBUG) { imshow("After Erosion", src); waitKey(0); }
     
-    // Automagically cluster nearby danger zones
-    //src = combine_clusters(src, range);
-    
-    src = region_filling(src, &area);
-    // Find contours of the clustered image
-    //contours = find_contours(src, gray_scale);
-    
-    // Calculate area
-    //area = calc_area(contours);
-    
+    // Fill in regions; black if too small, grey otherwise
+    src = region_filling(src, &area, range);
+    if (debug&&DEBUG) { imshow( "Result", src); waitKey(0); }
+
     printf("Total Usable Area: %.02f%%\n", (double) area * 100.0/ (src.rows * src.cols));
     
-    // Draw the contours on the input image
-    /*
-     cvtColor(gray_scale, output, CV_GRAY2RGB);
-     
-     RNG rng(12345);
-     for (int x = 0; x < contours.size(); x++) {
-     Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255));
-     drawContours( output, contours, x, color, -1, 8);
-     }
-     */
-    // Display the results if debug is enabled
-    if (debug&&DEBUG) { imshow( "Result", src); waitKey(0); }
     
     // Save the eroded image for further comparisons
     imwrite(output_name, src);
     return 0;
+}
+
+int calcArea(int radius) {
+    return (int)PI*radius*radius;
 }
 
 /*
@@ -113,314 +93,40 @@ Mat smooth_input(Mat src, int count, int size, int type){
         dilate(img, img, morph_values);
     }
     
-    if (debug&&DEBUG) { imshow("After Erosion", img); waitKey(0); }
-    
     return img;
 }
 
 /*
- Reads in an eroded image (img) and the thresholded original image(gray).
- Finds the contours in the eroded image then draws the contours over the
- thresholded image converted back to RGB.
+ * Scan the image for safe pixels and uses flood fill to find safe
+ * regions that stem from the safe pixel. The region is first filled
+ * in to be gey, but if the region is bellow an area threshold
+ * determined by range then it is refilled as black.
  */
-std::vector<std::vector<Point>> find_contours(Mat img, Mat gray) {
-    
-    std::vector<std::vector<Point>> contours;
-    std::vector<Vec4i> hierarchy;
-    // std::vector<Vec4i> lines;
-    Mat output, morph_values;
-    
-    // Find edges with canny
-    Canny (img, img, 50, 300, 5);
-    
-    // Display the results if debug is enabled
-    if (debug&&DEBUG) { imshow( "Canny Result", img); waitKey(0); }
-    
-    morph_values = getStructuringElement(MORPH_CROSS, Size(3,3));
-    
-    dilate(img,img, morph_values);
-    erode(img, img, morph_values);
-    
-    if (debug&&DEBUG) { imshow( "Canny After Morphing", img); waitKey(0); }
-    
-    // Find contours; Use external contours to prevent calculating area with internal and external
-    findContours(img, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0,0));
-    
-    return contours;
-}
-
-Mat region_filling(Mat image, int *size) {
+Mat region_filling(Mat image, int *size, int range) {
     
     Mat filled = image.clone();
     
-    if (debug&&DEBUG) { imshow( "After Inversion", image); waitKey(0); }
-    //Blob Detection to get the Keypoints
-    SimpleBlobDetector::Params safe_params;
-    safe_params.filterByArea = true;
-    safe_params.minArea = 0;
-    safe_params.maxArea = 50;
-    safe_params.filterByConvexity = true;
-    safe_params.minConvexity = 0;
-    safe_params.maxConvexity = 1;
-    safe_params.filterByColor = true;
-    safe_params.blobColor = 255;
-    
-    Ptr<SimpleBlobDetector> safe_detect = SimpleBlobDetector::create(safe_params);
-    
-    std::vector<KeyPoint> safe_points;
-    safe_detect->detect(image, safe_points);
-    
-    //RNG rng(12345);
-    cvtColor(image, image, CV_GRAY2RGB);
-    
-    for (KeyPoint kp : safe_points) {
-        
-        Scalar color = Scalar(0,0,0);
-        floodFill(image, kp.pt, color);
-    }
-    
-    for (int i = 0; i < image.cols; i++) {
-        for (int j = 0; j < image.rows; j++) {
-            int p_val = image.at<uchar>(i, j);
-            if (p_val == 255) floodFill(image, Point(i,j), Scalar(128, 128, 128));
-        }
-    }
-    //drawKeypoints(image, safe_points, image, Scalar(0,0,255), DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-    return image;
-}
-/*
- Finds blobs of dangerous terrain and draws lines connecting blobs
- near to each other to segment the image. This simplifies the contour
- analysis which should also simplify area calculation.
- */
-Mat combine_clusters(Mat input, int range){
-    
-    input = imbinary(input);
-    
-    Mat output = input.clone();
-    
-    /*A blob detector to detect hazard zones; can be any size*/
-    SimpleBlobDetector::Params hzrd_params;
-    hzrd_params.filterByArea = true;
-    hzrd_params.minArea = 0;
-    hzrd_params.maxArea = 100000;
-    hzrd_params.filterByConvexity = true;
-    hzrd_params.minConvexity = 0;
-    
-    /*Not compatible below OpenCV Version 3.0*/
-    Ptr<SimpleBlobDetector> hzrd_detect = SimpleBlobDetector::create(hzrd_params);
-    
-    std::vector<KeyPoint> hzrd_keypoints;
-    hzrd_detect->detect(input, hzrd_keypoints);
-    
-    for (KeyPoint p1 : hzrd_keypoints) {
-        if (debug&&DEBUG) std::cout << "Entering KeyPoint loop\n";
-        int x1 = (int) p1.pt.x;
-        int y1 = (int) p1.pt.y;
-        
-        /*Links together clusters of danger zones*/
-        for (KeyPoint p2 : hzrd_keypoints) {
-            if (debug&&DEBUG) std::cout << "Entering Connector loop\n";
-            int border_x1, border_y1;
-            int border_x2, border_y2;
-            int delta_x1, delta_y1;
-            int delta_x2, delta_y2;
+    //Loops to check every pixel
+    for (int x = 0; x < filled.rows; x++) {
+        for (int y = 0; y < filled.cols; y++) {
             
-            int x2 = (int) p2.pt.x;
-            int y2 = (int) p2.pt.y;
-            
-            /*set border pixels to center pixels*/
-            border_x1 = x1;
-            border_y1 = y1;
-            border_x2 = x2;
-            border_y2 = y2;
-            
-            /*find delta values from p2 to p1*/
-            delta_x2 = x1-x2;
-            delta_y2 = y1-y2;
-            if (delta_x2 == 0) delta_y2 = 1;
-            else if (delta_y2 == 0) delta_x2 = 1;
-            else {
-                delta_x2 = (int) delta_x2/std::min(delta_x2, delta_y2);
-                delta_y2 = (int) delta_y2/std::min(delta_x2, delta_y2);
-            }
-            
-            /*find border pixel for p2*/
-            while (true) {
-                int p_val = (int) input.at<uchar>(border_x2+delta_x2, border_y2+delta_y2);
-                if (p_val == 255) break;
-                else if (debug&&DEBUG) {
-                    std::cout << border_x2 << ", " << border_y2 << '\n';
-                    std::cout << "Grey value 2: " << p_val << '\n';
-                }
+            //pixel holds greyscale value of current pixel white==255 black==0
+            uchar* pixel = &filled.at<uchar>(x,y);
+            if ((*pixel) == 255) {
                 
-                border_x2 += delta_x2;
-                border_y2 += delta_y2;
+                //a is the pixel area filled in by floodFill
+                int a = floodFill(filled, Point(y,x), 128);
                 
+                //areas that are too small get refilled as black
+                if (a < range)
+                    floodFill(filled, Point(y,x), 0);
+                else
+                    (*size) += a;
             }
-            
-            /*delta values from p1 to p2 is the inverse of p2 to p1*/
-            delta_x1 = -delta_x2;
-            delta_y1 = -delta_y2;
-            
-            if (delta_x1 == 0) delta_y1 = 1;
-            else if (delta_y1 == 0) delta_x1 = 1;
-            else {
-                delta_x1 = (int) delta_x1/std::min(delta_x1, delta_y1);
-                delta_y1 = (int) delta_y1/std::min(delta_x1, delta_y1);
-            }
-            /*find border pixel for p1*/
-            while ( ((int)input.at<uchar>(border_x1+delta_x1, border_y1+delta_y1)) == 0) {
-                int p_val = input.at<uchar>(border_x1+delta_x1, border_y1+delta_y1);
-                if (p_val == 255) break;
-                else if (debug&&DEBUG) {
-                    std::cout << border_x1 << ", " << border_y1 << '\n';
-                    std::cout << "Grey value 1: " << (int)input.at<uchar>(border_x2, border_y2) << '\n';
-                }
-                border_x1 += delta_x1;
-                border_y1 += delta_y1;
-            }
-            
-            /*calculate distance between border pixels*/
-            int dist = distance(border_x1,border_y1,border_x2,border_y2);
-            if (dist > 0 && dist < range*2)
-                line(output, Point(x1,y1), Point(x2,y2), Scalar(0,0,0), 3);
-        }
-        
-        Point p2;
-        /*Links blobs to above hazard zones within range*/
-        p2 = linkBlobAbove(range*2, input, p1);
-        if ( !(p2.x == -1 && p2.y == -1) )
-            line(output, Point(x1,y1), Point(p2.x, p2.y+4), Scalar(0,0,0), 3);
-        
-        /*Links blobs to below hazard zones within range*/
-        p2 = linkBlobBelow(range*2, input, p1);
-        if ( !(p2.x == -1 && p2.y == -1) )
-            line(output, Point(x1,y1), Point(p2.x, p2.y-4), Scalar(0,0,0), 3);
-        
-        /*Links blobs to right hazard zones within range*/
-        p2 = linkBlobRight(range*2, input, p1);
-        if ( !(p2.x == -1 && p2.y == -1) )
-            line(output, Point(x1,y1), Point(p2.x+4, p2.y), Scalar(0,0,0), 3);
-        
-        /*Links blobs to left hazard zones within range*/
-        p2 = linkBlobLeft(range*2, input, p1);
-        if ( !(p2.x == -1 && p2.y == -1) )
-            line(output, Point(x1,y1), Point(p2.x-4, p2.y), Scalar(0,0,0), 3);
-    }
-    
-    if (debug&&DEBUG) { imshow( "After Blob Clustering", output); waitKey(0); }
-    
-    return output;
-}
-
-Point linkBlobLeft(int range, Mat& input, KeyPoint blob) {
-    int x1 = (int) blob.pt.x;
-    int y1 = (int) blob.pt.y;
-    
-    for (int i = x1-1; i > 0; i--) {
-        if (input.at<uchar>(y1,i) == 255) {
-            for (int j = i-1; j > std::max(i-range,0); j--) {
-                if (input.at<uchar>(y1,j) == 0) {
-                    return Point(j, y1);
-                }
-            }
-            return Point(-1,-1);
         }
     }
-    return Point(-1, -1);
-}
-
-Point linkBlobRight(int range, Mat& input, KeyPoint blob) {
-    int x1 = (int) blob.pt.x;
-    int y1 = (int) blob.pt.y;
     
-    for (int i = x1+1; i < input.cols; i++) {
-        if (input.at<uchar>(y1,i) == 255) {
-            for (int j = i+1; j < std::min(i+range, input.cols); j++) {
-                if (input.at<uchar>(y1,j) == 0) {
-                    return Point(j, y1);
-                }
-            }
-            break;
-        }
-    }
-    return Point(-1, -1);
-}
-
-Point linkBlobAbove(int range, Mat& input, KeyPoint blob) {
-    int x1 = (int) blob.pt.x;
-    int y1 = (int) blob.pt.y;
-    
-    for (int i = y1+1; i < input.rows; i++) {
-        if (input.at<uchar>(i,x1) == 255) {
-            for (int j = i+1; j < std::min(i+range,input.rows); j++) {
-                if (input.at<uchar>(j,x1) == 0) {
-                    return Point(x1, j);
-                }
-            }
-            break;
-        }
-    }
-    return Point(-1, -1);
-}
-
-Point linkBlobBelow(int range, Mat& input, KeyPoint blob) {
-    int x1 = (int) blob.pt.x;
-    int y1 = (int) blob.pt.y;
-    
-    for (int i = y1-1; i > 0; i--) {
-        if (input.at<uchar>(i,x1) == 255) {
-            for (int j = i-1; j > std::max(i-range,0); j--) {
-                if (input.at<uchar>(j,x1) == 0) {
-                    return Point(x1, j);
-                }
-            }
-            break;
-        }
-    }
-    return Point(-1, -1);
-}
-
-/*Converts gray-scale image to binary image*/
-Mat imbinary(Mat im) {
-    Mat bnry = im.clone();
-    for (int x = 0; x < bnry.rows; x++) {
-        for (int y = 0; y < bnry.cols; y++) {
-            uchar* pixel = &bnry.at<uchar>(x,y);
-            ( (*pixel) < 128) ? ( (*pixel) = 0) : ( (*pixel) = 255);
-        }
-    }
-    return bnry;
-}
-/*Inverts gray-scale image*/
-Mat iminvert(Mat im) {
-    Mat nvrt = im.clone();
-    for (int x = 0; x < nvrt.rows; x++) {
-        for (int y = 0; y < nvrt.cols; y++) {
-            uchar* pixel = &nvrt.at<uchar>(x,y);
-            (*pixel) = 255 - (*pixel);
-        }
-    }
-    return nvrt;
-}
-
-double calc_area(std::vector<std::vector<Point>> contours){
-    
-    double area = 0.0, next;
-    
-    for (int x = 0; x < contours.size(); x++) {
-        next = contourArea(contours[x]);
-        area += next;
-        
-        // Show the area calculation if debug is enabled
-        if (debug&&DEBUG) { printf("After %d cycles: Total %.2f, Current %.2f\n", x, area, next);}
-    }
-    return area;
-}
-
-int distance(int x1,int y1,int x2,int y2) {
-    return (int) std::sqrt( std::pow(x2-x1,2) + std::pow(y2-y1,2));
+    return filled;
 }
 
 int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
