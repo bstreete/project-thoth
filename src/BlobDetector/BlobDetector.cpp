@@ -13,18 +13,13 @@ using namespace cv;
 
 // cmake . && make && ./BlobDetector -i ../../input/st_2472776818_vAUTOLABEL.ppm -o test.png
 
-// Change from contours?
-//
 // Global debug flag
 int debug = 0;
 
-// Main component prototypes
+// Function prototypes
 Mat smooth_input(Mat img, int count, int size, int type);
 Mat region_filling(Mat image, int* size, int range);
-
 int calcArea(int radius);
-
-// Miscellaneous helper prototypes
 int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
                std::string *output_name, int argc, char** argv);
 void usage(char* binary);
@@ -35,7 +30,7 @@ int main( int argc, char** argv ){
     int size = 5, type = MORPH_ELLIPSE, count = 5, status, range = 10;
     Mat src, gray_scale, output;
     std::vector<std::vector<Point>> contours;
-    int area;
+    int area = 0;
     
     // Check the passed arguments
     status = check_args(&size, &type, &count, &range, &file_name, &output_name, argc, argv);
@@ -63,8 +58,7 @@ int main( int argc, char** argv ){
 
     printf("Total Usable Area: %.02f%%\n", (double) area * 100.0/ (src.rows * src.cols));
     
-    
-    // Save the eroded image for further comparisons
+    // Save the final image for further comparisons
     imwrite(output_name, src);
     return 0;
 }
