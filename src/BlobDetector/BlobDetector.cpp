@@ -20,6 +20,7 @@ int debug = 0;
 Mat smooth_input(Mat img, int count, int size, int type);
 Mat region_filling(Mat image, int* size, int range);
 int calcArea(int radius);
+Mat threshold(Mat src);
 int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
                std::string *output_name, int argc, char** argv);
 void usage(char* binary);
@@ -45,8 +46,8 @@ int main( int argc, char** argv ){
     // Ensure the image loaded
     if( !src.data){ fprintf(stderr, "Unable to load %s. Verify the path and try again.\n", argv[1]); return 1; }
     
-    // Threshold the image - BGR
-    inRange(src, Scalar(0,0,150), Scalar(255,255,255), gray_scale);
+    // Threshold the image
+    gray_scale = threshold(src); 
     
     // Erode the image
     src = smooth_input(gray_scale, count, size, type);
@@ -67,6 +68,14 @@ int calcArea(int radius) {
     return (int)PI*radius*radius;
 }
 
+/* Takes the inital image and thresholds it. Then the image is returned.  */
+Mat threshold(Mat src) { 
+    Mat result; 
+
+    inRange(src, Scalar(0,0,254), Scalar(0,0,255), result);
+    
+    return result; 
+}
 /*
  Erodes and dilates the passed image multiple times determined by the value
  passed in count. The size determines the size of the pixel used
