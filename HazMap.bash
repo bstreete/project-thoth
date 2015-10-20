@@ -8,9 +8,10 @@
 # out puts the usable safe area of the image 
 # saves a color image with the safe areas identified
 
-# Assumes textureCam is installed 
-# Assumes the image is in this folder
-# Assumes openCV is installed 
+# Have to dump the scripts into a gimp script directory
+# Assumes textureCam is compiled in ./src/texturecam
+# Assumes Gimp is installed
+# Assumes OpenCV 3.0.0 is installed
 
 # Set the default inputs
 radius=10
@@ -23,13 +24,18 @@ function main {
 	checkArgs
 
 	# Get the base filename
-	# imageName=${imageName%.fits}
+	imageName=${imageName%.fits}
+
+	# build decision forest if requested - Assumes that the images are already converted
+	# input directory with pgm = original ppm = overlay
+
+	# otherwise, use the specified decision tree 
 
 	# Convert from fits to pgm for TextureCam -- put script in scripts directory for gimp?
 	# gimp -i -b convertFitsPgm $imageName.fits $imageName.pgm
 
 	# classify the image features using TextureCam
-	# call "src/texturecam/tcclass rocks.rf $imageName.pgm $imageName.ppm"
+	call "src/texturecam/tcclass rocks.rf $imageName.pgm $imageName.ppm"
 
 	# Run it through the blob detector to get the usable area  
 	call "src/BlobDetector/BlobDetector -i $imageName.ppm -o ${imageName}_out.png -r $radius"
@@ -95,7 +101,7 @@ USAGE
 # Wrapper for calling functions that will catch errors and exit 
 function call {
 	$@
-echo $?
+
 	if [ $? -ne 0 ] ; then
 		exit 1
 	fi
