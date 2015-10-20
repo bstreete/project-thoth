@@ -72,7 +72,7 @@ int calcArea(int radius) {
 Mat threshold(Mat src) { 
     Mat result; 
 
-    inRange(src, Scalar(0,0,254), Scalar(0,0,255), result);
+    inRange(src, Scalar(0,125,0), Scalar(0,255,0), result);
     
     return result; 
 }
