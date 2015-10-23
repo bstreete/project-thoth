@@ -7,7 +7,7 @@
 #include <iostream>
 
 using namespace cv;
-
+using namespace std;
 #define DEBUG 1     // Set to 0 for release
 #define PI 3.1415
 
@@ -23,13 +23,15 @@ int calcArea(int radius);
 Mat threshold(Mat src);
 int check_args(int *size, int *type, int *count, int *range, std::string *file_name,
                std::string *output_name, int argc, char** argv);
+void merge(const Mat &image, Mat &image2, Mat &result, string output_name);
 void usage(char* binary);
+
 
 /** @function main */
 int main( int argc, char** argv ){
     std::string file_name, output_name;
     int size = 5, type = MORPH_ELLIPSE, count = 5, status, range = 10;
-    Mat src, gray_scale, output;
+    Mat src, originalImage, TexCamOut, gray_scale, output, HazMap;
     std::vector<std::vector<Point>> contours;
     int area = 0;
     
@@ -40,11 +42,16 @@ int main( int argc, char** argv ){
     // Invalid arguments passed
     if (status == 1) return 1;
     
-    // Read the image
-    src = imread(file_name);
+    // Read the textureCam output image and save a copy for the super imposition
+    //file_name = file_name+".ppm";
+    src = imread(file_name+".ppm");
+    TexCamOut = imread(file_name+".ppm");
+    
+    //read the original image
+    originalImage = imread(file_name+".tif");
     
     // Ensure the image loaded
-    if( !src.data){ fprintf(stderr, "Unable to load %s. Verify the path and try again.\n", argv[1]); return 1; }
+    if( !src.data){ fprintf(stderr, "Unable to load the image. Verify the path and try again.\nDo not include the extension\n"); return 1; }
     
     // Threshold the image
     gray_scale = threshold(src); 
@@ -59,8 +66,14 @@ int main( int argc, char** argv ){
 
     printf("Total Usable Area: %.02f%%\n", (double) area * 100.0/ (src.rows * src.cols));
     
+    merge(originalImage, TexCamOut, HazMap, output_name);
+    namedWindow("HazardMap");
+    
+    imshow("HazardMap", HazMap);
+    waitKey(0);
+    cout<<" output_name = "<< output_name;
     // Save the final image for further comparisons
-    imwrite(output_name, src);
+    imwrite(output_name+".bmp", HazMap);
     return 0;
 }
 
@@ -102,7 +115,7 @@ Mat smooth_input(Mat src, int count, int size, int type){
 /*
  * Scan the image for safe pixels and uses flood fill to find safe
  * regions that stem from the safe pixel. The region is first filled
- * in to be gey, but if the region is bellow an area threshold
+ * in to be grey, but if the region is below an area threshold
  * determined by range then it is refilled as black.
  */
 Mat region_filling(Mat image, int *size, int range) {
@@ -137,6 +150,7 @@ int check_args(int *size, int *type, int *count, int *range, std::string *file_n
     
     char option;
     int temp;
+    size_t extLoc = 99;
     
     // Check for arguments
     if (argc == 1) {
@@ -222,6 +236,21 @@ int check_args(int *size, int *type, int *count, int *range, std::string *file_n
     
     
     return 0;
+}
+
+///perfroming simple image arithmatic
+//this function will superimpose two images
+void merge(const Mat &originalImage, Mat &TexCamOut, Mat &HazMap, string output_name){
+    
+    //allocate the result image
+    HazMap.create(originalImage.size(), originalImage.type());
+    //superimpose
+    addWeighted(originalImage, 0.7, TexCamOut, 0.9, 0.0,HazMap);
+    
+   
+    
+    //save the superimposed image
+    imwrite(output_name+".bmp", HazMap);
 }
 
 void usage(char* binary)  {
