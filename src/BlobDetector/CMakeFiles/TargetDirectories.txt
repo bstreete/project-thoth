@@ -1,1 +1,0 @@
-/Users/carinaj/project-thoth/src/BlobDetector/CMakeFiles/BlobDetector.dir
